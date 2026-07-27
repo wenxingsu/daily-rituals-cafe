@@ -2,6 +2,7 @@ const MENU_STORAGE_KEY = "daily-rituals-menu-v1";
 const CART_STORAGE_KEY = "daily-rituals-order-v1";
 const TABLE_STORAGE_KEY = "daily-rituals-table-v1";
 const ORDERS_STORAGE_KEY = "daily-rituals-orders-v1";
+const LAST_ORDER_STORAGE_KEY = "daily-rituals-last-order-v1";
 const API_BASE = "/api";
 
 const seedMenu = [
@@ -29,6 +30,8 @@ const state = {
   cart: loadCart(),
   table: loadTable(),
   orders: loadOrders(),
+  lastOrder: loadLastOrder(),
+  cartOpen: false,
   payment: "linepay",
   editingId: null,
 };
@@ -56,6 +59,9 @@ function loadCart() {
 
 function loadTable() { return sessionStorage.getItem(TABLE_STORAGE_KEY) || ""; }
 function loadOrders() { return parseStorage(ORDERS_STORAGE_KEY, []); }
+function loadLastOrder() {
+  try { return JSON.parse(sessionStorage.getItem(LAST_ORDER_STORAGE_KEY)) || null; } catch { return null; }
+}
 let cloudSyncAvailable = true;
 
 async function cloudRequest(path, options = {}) {
@@ -97,6 +103,10 @@ function saveMenu() {
 function saveCart() { sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.cart)); }
 function saveTable() { sessionStorage.setItem(TABLE_STORAGE_KEY, state.table); }
 function saveOrders() { localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(state.orders)); }
+function saveLastOrder() {
+  if (state.lastOrder) sessionStorage.setItem(LAST_ORDER_STORAGE_KEY, JSON.stringify(state.lastOrder));
+  else sessionStorage.removeItem(LAST_ORDER_STORAGE_KEY);
+}
 function money(value) { return Number(value || 0).toLocaleString("zh-TW"); }
 function escapeHTML(value) { return String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#039;", '"': "&quot;" }[character])); }
 function getCustomerLink() { return `${window.location.href.split("?")[0]}?mode=customer`; }
@@ -112,7 +122,7 @@ function renderLegacy() {
 
 function renderCustomer() {
   const visibleMenu = state.menu.filter((item) => state.category === "全部" || item.category === state.category);
-  return `<div class="customer-grid"><section class="customer-main" aria-labelledby="menu-title"><div class="hero"><div class="hero-copy"><span class="eyebrow">A SMALL COFFEE HOUSE · SINCE 2024</span><h1>把日常，沖成一杯剛好。</h1><p>選一杯今天想喝的，坐下來，讓時間慢一點。所有飲品皆可選擇冰／熱。</p><div class="hero-tags"><span>手沖咖啡</span><span>自家烘焙</span><span>每日甜點</span></div></div><div class="hero-cup" aria-hidden="true"><span class="steam"></span></div></div><div class="section-heading"><div><span class="eyebrow">TODAY'S MENU</span><h2 id="menu-title">今天想來點什麼？</h2></div><p>${state.menu.length} 款餐點・現點現做</p></div><div class="category-tabs" role="tablist" aria-label="餐點分類">${["全部", "咖啡", "茶飲", "甜點"].map((category) => `<button class="${state.category === category ? "active" : ""}" data-category="${category}" role="tab" aria-selected="${state.category === category}">${category}</button>`).join("")}</div><div class="menu-grid" style="margin-top: 18px">${visibleMenu.length ? visibleMenu.map(renderMenuCard).join("") : `<div class="manager-empty" style="grid-column: 1/-1">這個分類還沒有餐點。</div>`}</div></section>${renderCart()}</div>`;
+  return `<div class="customer-grid"><section class="customer-main" aria-labelledby="menu-title"><div class="hero"><div class="hero-copy"><span class="eyebrow">A SMALL COFFEE HOUSE · SINCE 2024</span><h1>把日常，沖成一杯剛好。</h1><p>選一杯今天想喝的，坐下來，讓時間慢一點。所有飲品皆可選擇冰／熱。</p><div class="hero-tags"><span>手沖咖啡</span><span>自家烘焙</span><span>每日甜點</span></div></div><div class="hero-cup" aria-hidden="true"><span class="steam"></span></div></div><div class="section-heading"><div><span class="eyebrow">TODAY'S MENU</span><h2 id="menu-title">今天想來點什麼？</h2></div><p>${state.menu.length} 款餐點・現點現做</p></div><div class="category-tabs" role="tablist" aria-label="餐點分類">${["全部", "咖啡", "茶飲", "甜點"].map((category) => `<button class="${state.category === category ? "active" : ""}" data-category="${category}" role="tab" aria-selected="${state.category === category}">${category}</button>`).join("")}</div><div class="menu-grid" style="margin-top: 18px">${visibleMenu.length ? visibleMenu.map(renderMenuCard).join("") : `<div class="manager-empty" style="grid-column: 1/-1">這個分類還沒有餐點。</div>`}</div></section>${renderCart()}${renderMobileCartTrigger()}</div>`;
 }
 
 function renderMenuCard(item) {
@@ -123,7 +133,18 @@ function renderMenuCard(item) {
 function renderCart() {
   const items = cartItems();
   const count = cartCount();
-  return `<aside class="cart-panel ${items.length ? "has-items" : ""}" aria-label="購物車"><div class="cart-panel__head"><div><span class="eyebrow">YOUR ORDER</span><h2>你的訂單</h2></div><span class="cart-count">${count}</span></div><label class="table-field"><span>內用桌號</span><input data-table-number value="${escapeHTML(state.table)}" maxlength="8" placeholder="例如 A12" autocomplete="off" /></label><div class="cart-items">${items.length ? items.map(renderCartItem).join("") : `<div class="empty-cart"><span aria-hidden="true">☕</span><p>購物車還是空的<br />挑一杯喜歡的開始吧</p></div>`}</div><div class="cart-summary"><div class="summary-row"><span>小計</span><span>NT$ ${money(cartTotal())}</span></div><div class="summary-row"><span>服務費</span><span>免服務費</span></div><div class="summary-row total"><span>合計</span><span>NT$ ${money(cartTotal())}</span></div><button class="primary-button primary-button--full" data-checkout ${count ? "" : "disabled"}>前往結帳 <span aria-hidden="true">→</span></button></div></aside>`;
+  const recentOrder = state.lastOrder;
+  const recentItems = recentOrder?.items || [];
+  const recentOrderMarkup = recentOrder ? `<section class="recent-order" aria-label="上一筆已送出的訂單"><div class="recent-order__heading"><div><span class="eyebrow">LAST ORDER</span><h3>上一筆訂單</h3></div><span class="recent-order__status">${escapeHTML(recentOrder.status || "已送出")}</span></div><p class="recent-order__table">桌號 ${escapeHTML(recentOrder.table)}・${escapeHTML(recentOrder.payment)}</p><div class="recent-order__items">${recentItems.map((item) => `<div><span>${escapeHTML(item.name)} × ${item.quantity}</span><strong>NT$ ${money(item.subtotal)}</strong></div>`).join("")}</div><p class="recent-order__hint">下一位客人填寫同桌號後，這筆清單會自動清除。</p></section>` : "";
+  return `<aside class="cart-panel ${items.length ? "has-items" : ""} ${state.cartOpen ? "cart-panel--mobile-open" : ""}" aria-label="購物車"><div class="cart-panel__head"><div><span class="eyebrow">YOUR ORDER</span><h2>你的訂單</h2></div><div class="cart-panel__head-actions"><span class="cart-count">${count}</span><button class="cart-close" type="button" data-close-cart aria-label="返回餐點">×</button></div></div><label class="table-field"><span>內用桌號</span><input data-table-number value="${escapeHTML(state.table)}" maxlength="8" placeholder="例如 A12" autocomplete="off" /></label><div class="cart-items">${items.length ? items.map(renderCartItem).join("") : `<div class="empty-cart"><span aria-hidden="true">☕</span><p>購物車還是空的<br />挑一杯喜歡的開始吧</p></div>`}</div>${recentOrderMarkup}<div class="cart-summary"><div class="summary-row"><span>小計</span><span>NT$ ${money(cartTotal())}</span></div><div class="summary-row"><span>服務費</span><span>免服務費</span></div><div class="summary-row total"><span>合計</span><span>NT$ ${money(cartTotal())}</span></div><button class="primary-button primary-button--full" data-checkout ${count ? "" : "disabled"}>前往結帳 <span aria-hidden="true">→</span></button></div></aside>`;
+}
+
+function renderMobileCartTrigger() {
+  const count = cartCount();
+  if (!count && !state.lastOrder) return "";
+  const label = count ? `查看訂單・${count} 項` : "查看上一筆訂單";
+  const total = count ? cartTotal() : Number(state.lastOrder?.total || 0);
+  return `<button class="mobile-cart-trigger" type="button" data-open-cart><span>${label}</span><strong>NT$ ${money(total)}</strong><span aria-hidden="true">→</span></button>`;
 }
 
 function renderCartItem({ item, quantity }) {
@@ -221,12 +242,26 @@ function openItemDialog(id = null) {
 }
 
 document.addEventListener("input", (event) => {
-  if (event.target.matches("[data-table-number]")) { state.table = event.target.value.toUpperCase(); event.target.value = state.table; saveTable(); }
+  if (!event.target.matches("[data-table-number]")) return;
+  const nextTable = event.target.value.trim().toUpperCase();
+  let clearedLastOrder = false;
+  if (state.lastOrder && !cartCount() && nextTable === String(state.lastOrder.table || "").trim().toUpperCase()) {
+    state.lastOrder = null;
+    saveLastOrder();
+    showToast("已開始下一筆點餐");
+    clearedLastOrder = true;
+  }
+  state.table = nextTable;
+  event.target.value = state.table;
+  saveTable();
+  if (clearedLastOrder) render();
 });
 
 document.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest("button, a") : null;
   if (!target) return;
+  if (target.dataset.openCart !== undefined) { state.cartOpen = true; render(); return; }
+  if (target.dataset.closeCart !== undefined) { state.cartOpen = false; render(); return; }
   if (target.dataset.view) { state.view = target.dataset.view; render(); return; }
   if (target.dataset.managerPage) { state.managerPage = target.dataset.managerPage; render(); return; }
   if (target.dataset.category) { state.category = target.dataset.category; render(); return; }
@@ -410,8 +445,11 @@ async function submitOrderFromPayment(event) {
   } catch {
     // Keep the order locally so it is not lost if the API is temporarily unavailable.
   }
+  state.lastOrder = structuredClone(order);
+  saveLastOrder();
   state.cart = {};
   state.table = "";
+  state.cartOpen = true;
   saveCart();
   sessionStorage.removeItem(TABLE_STORAGE_KEY);
   closeDialog(checkoutDialog);
