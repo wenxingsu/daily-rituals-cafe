@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f0e8" />
+    <meta name="description" content="日常咖啡室 QR Code 點餐系統初版" />
+    <title>日常咖啡室｜QR Code 點餐系統</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要內容</a>
+    <div id="app" class="app-shell">
+      <div class="loading-state" role="status">正在準備今日菜單…</div>
+    </div>
+
+    <dialog id="checkout-dialog" class="modal">
+      <div class="modal__inner">
+        <div class="modal__topline">
+          <div><span class="eyebrow">CHECKOUT</span><h2>選擇付款方式</h2></div>
+          <button class="icon-button" data-close-dialog="checkout-dialog" aria-label="關閉結帳視窗">×</button>
+        </div>
+        <p class="modal__hint">初版為流程展示，尚未串接真實支付服務。</p>
+        <div id="checkout-summary" class="checkout-summary"></div>
+        <div id="payment-options" class="payment-options"></div>
+        <button class="primary-button primary-button--full" data-submit-payment>確認付款 <span aria-hidden="true">→</span></button>
+      </div>
+    </dialog>
+
+    <dialog id="item-dialog" class="modal">
+      <form id="item-form" class="modal__inner">
+        <div class="modal__topline">
+          <div><span class="eyebrow">MENU ITEM</span><h2 id="item-dialog-title">新增餐點</h2></div>
+          <button type="button" class="icon-button" data-close-dialog="item-dialog" aria-label="關閉餐點視窗">×</button>
+        </div>
+        <input type="hidden" name="id" />
+        <div class="form-grid">
+          <label class="field field--wide">餐點名稱 <input required name="name" placeholder="例如：焦糖海鹽拿鐵" /></label>
+          <label class="field">英文名稱 <input name="nameEn" placeholder="Caramel Latte" /></label>
+          <label class="field">分類
+            <select name="category"><option value="咖啡">咖啡</option><option value="茶飲">茶飲</option><option value="甜點">甜點</option></select>
+          </label>
+          <label class="field">價格 <input required min="0" type="number" name="price" placeholder="150" /></label>
+          <label class="field">標籤 <input name="tag" placeholder="人氣推薦" /></label>
+          <label class="field field--wide">圖片網址 <input required type="url" name="image" placeholder="https://images.unsplash.com/..." /></label>
+          <label class="field field--wide">餐點描述 <textarea required name="description" rows="3" placeholder="用一句話介紹這杯飲品…"></textarea></label>
+          <label class="checkbox-field field--wide"><input type="checkbox" name="soldOut" /> 標記為已售完（顧客端將無法加入購物車）</label>
+        </div>
+        <button class="primary-button primary-button--full" type="submit">儲存餐點 <span aria-hidden="true">→</span></button>
+      </form>
+    </dialog>
+
+    <dialog id="new-order-dialog" class="modal modal--notification" aria-labelledby="new-order-title">
+      <div class="modal__inner">
+        <div class="notification-icon" aria-hidden="true">🔔</div>
+        <span class="eyebrow">NEW ORDER</span>
+        <h2 id="new-order-title">收到新訂單</h2>
+        <p class="modal__hint">顧客剛完成點餐，請確認內容並開始準備。</p>
+        <div id="new-order-summary" class="new-order-summary"></div>
+        <div class="notification-actions">
+          <button class="secondary-button" data-close-dialog="new-order-dialog">稍後查看</button>
+          <button class="primary-button" data-open-orders>查看訂單並出餐 <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
