@@ -269,6 +269,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .legend-dot--revenue { background: var(--orange); }
 .legend-dot--quantity { background: #9d7a5f; }
 
+.table-field select { width: 116px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fffefa; color: var(--brown-dark); font-weight: 800; font-size: 12px; }
+
 @media (max-width: 760px) {
   .stats-period-toolbar { align-items: stretch; flex-direction: column; }
   .period-switch { justify-content: stretch; }
@@ -306,7 +308,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .cart-panel--mobile-open .cart-close { display: grid; place-items: center; }
   .cart-panel.cart-panel--mobile-open .table-field { display: flex; align-items: center; gap: 12px; padding: 20px 18px 14px; margin: 0; }
   .cart-panel--mobile-open .table-field span { flex: 1; font-size: 12px; }
-  .cart-panel--mobile-open .table-field input { width: 132px; height: 42px; padding: 9px 12px; font-size: 14px; text-align: left; }
+  .cart-panel--mobile-open .table-field input,
+  .cart-panel--mobile-open .table-field select { width: 132px; height: 42px; padding: 9px 12px; font-size: 14px; text-align: left; }
   .cart-panel.cart-panel--mobile-open .cart-items { display: grid; max-height: none; min-height: 0; overflow: visible; padding: 8px 18px 0; }
   .cart-panel--mobile-open .recent-order { display: block; margin: 16px 18px 0; }
   .cart-panel.cart-panel--mobile-open .cart-summary { display: block; margin: 18px; padding: 16px 0 24px; margin-top: auto; }

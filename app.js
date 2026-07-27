@@ -57,7 +57,10 @@ function loadCart() {
   try { return JSON.parse(sessionStorage.getItem(CART_STORAGE_KEY)) || {}; } catch { return {}; }
 }
 
-function loadTable() { return sessionStorage.getItem(TABLE_STORAGE_KEY) || ""; }
+function loadTable() {
+  const table = sessionStorage.getItem(TABLE_STORAGE_KEY) || "";
+  return /^(?:[1-9]|10)$/.test(table) ? table : "";
+}
 function loadOrders() { return parseStorage(ORDERS_STORAGE_KEY, []); }
 function loadLastOrder() {
   try { return JSON.parse(sessionStorage.getItem(LAST_ORDER_STORAGE_KEY)) || null; } catch { return null; }
@@ -130,7 +133,27 @@ function renderMenuCard(item) {
   return `<article class="menu-card ${soldOut ? "is-sold-out" : ""}"><div class="menu-card__image"><img src="${escapeHTML(item.image)}" alt="${escapeHTML(item.name)}" loading="lazy" />${soldOut ? `<span class="soldout-ribbon">已售完</span>` : `<span class="menu-tag">${escapeHTML(item.tag || item.category)}</span>`}</div><div class="menu-card__body"><div class="menu-card__top"><div><h3>${escapeHTML(item.name)}</h3><p class="name-en">${escapeHTML(item.nameEn || "DAILY SPECIAL")}</p></div></div><p class="menu-card__description">${escapeHTML(item.description)}</p><div class="menu-card__footer"><span class="price">${money(item.price)}</span><button class="add-button ${soldOut ? "sold-out-button" : ""}" data-add="${escapeHTML(item.id)}" aria-label="${soldOut ? `${escapeHTML(item.name)}已售完` : `加入${escapeHTML(item.name)}`}" ${soldOut ? "disabled" : ""}>${soldOut ? "×" : "+"}</button></div></div></article>`;
 }
 
+function renderTableSelector() {
+  const currentTable = String(state.table || "").trim();
+  const tableOptions = ['<option value="" disabled ' + (currentTable ? "" : "selected") + '>請選擇桌號</option>']
+    .concat(Array.from({ length: 10 }, (_, index) => {
+      const table = String(index + 1);
+      return `<option value="${table}" ${currentTable === table ? "selected" : ""}>桌號 ${table}</option>`;
+    }))
+    .join("");
+  return `<label class="table-field"><span>內用桌號</span><select data-table-number aria-label="選擇桌號">${tableOptions}</select></label>`;
+}
+
 function renderCart() {
+  const items = cartItems();
+  const count = cartCount();
+  const recentOrder = state.lastOrder;
+  const recentItems = recentOrder?.items || [];
+  const recentOrderMarkup = recentOrder ? `<section class="recent-order" aria-label="上一筆已送出的訂單"><div class="recent-order__heading"><div><span class="eyebrow">LAST ORDER</span><h3>上一筆訂單</h3></div><span class="recent-order__status">${escapeHTML(recentOrder.status || "已送出")}</span></div><p class="recent-order__table">桌號 ${escapeHTML(recentOrder.table)}・${escapeHTML(recentOrder.payment)}</p><div class="recent-order__items">${recentItems.map((item) => `<div><span>${escapeHTML(item.name)} × ${item.quantity}</span><strong>NT$ ${money(item.subtotal)}</strong></div>`).join("")}</div><p class="recent-order__hint">下一位客人填寫同桌號後，這筆清單會自動清除。</p></section>` : "";
+  return `<aside class="cart-panel ${items.length ? "has-items" : ""} ${state.cartOpen ? "cart-panel--mobile-open" : ""}" aria-label="購物車"><div class="cart-panel__head"><div><span class="eyebrow">YOUR ORDER</span><h2>你的訂單</h2></div><div class="cart-panel__head-actions"><span class="cart-count">${count}</span><button class="cart-close" type="button" data-close-cart aria-label="返回餐點">×</button></div></div>${renderTableSelector()}<div class="cart-items">${items.length ? items.map(renderCartItem).join("") : `<div class="empty-cart"><span aria-hidden="true">☕</span><p>購物車還是空的<br />挑一杯喜歡的開始吧</p></div>`}</div>${recentOrderMarkup}<div class="cart-summary"><div class="summary-row"><span>小計</span><span>NT$ ${money(cartTotal())}</span></div><div class="summary-row"><span>服務費</span><span>免服務費</span></div><div class="summary-row total"><span>合計</span><span>NT$ ${money(cartTotal())}</span></div><button class="primary-button primary-button--full" data-checkout ${count ? "" : "disabled"}>前往結帳 <span aria-hidden="true">→</span></button></div></aside>`;
+}
+
+function renderCartLegacy() {
   const items = cartItems();
   const count = cartCount();
   const recentOrder = state.lastOrder;
@@ -241,7 +264,7 @@ function openItemDialog(id = null) {
   openDialog(itemDialog);
 }
 
-document.addEventListener("input", (event) => {
+document.addEventListener("change", (event) => {
   if (!event.target.matches("[data-table-number]")) return;
   const nextTable = event.target.value.trim().toUpperCase();
   let clearedLastOrder = false;
@@ -393,9 +416,13 @@ async function syncMenuFromCloud() {
   try {
     const result = await cloudRequest("/menu");
     if (Array.isArray(result.items) && result.items.length) {
-      state.menu = result.items.map((item) => ({ ...item, soldOut: Boolean(item.soldOut) }));
-      localStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(state.menu));
-      render();
+      const nextMenu = result.items.map((item) => ({ ...item, soldOut: Boolean(item.soldOut) }));
+      const menuChanged = JSON.stringify(state.menu) !== JSON.stringify(nextMenu);
+      state.menu = nextMenu;
+      if (menuChanged) {
+        localStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(state.menu));
+        render();
+      }
     } else if (state.menu.length) {
       await putMenuToCloud(state.menu);
     }
