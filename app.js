@@ -375,6 +375,17 @@ function openNewOrderDialog(order) {
   openDialog(newOrderDialog);
 }
 
+function refreshLastOrderFromList(orders) {
+  if (!state.lastOrder?.id) return false;
+  const remoteOrder = orders.find((order) => order.id === state.lastOrder.id);
+  if (!remoteOrder) return false;
+  const statusChanged = remoteOrder.status !== state.lastOrder.status || (remoteOrder.completedAt || null) !== (state.lastOrder.completedAt || null);
+  if (!statusChanged) return false;
+  state.lastOrder = { ...state.lastOrder, ...remoteOrder };
+  saveLastOrder();
+  return true;
+}
+
 async function syncOrders(notify = false) {
   if (cloudSyncAvailable) {
     try {
@@ -387,8 +398,9 @@ async function syncOrders(notify = false) {
       state.orders = latestOrders;
       localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(state.orders));
       knownOrderIds = new Set(latestOrders.map((order) => order.id));
+      const lastOrderChanged = refreshLastOrderFromList(latestOrders);
       if (state.view === "owner" && newOrders.length) state.managerPage = "orders";
-      if (state.view === "owner") render();
+      if (state.view === "owner" || lastOrderChanged) render();
       if (notify && state.view === "owner" && newOrders.length) {
         showToast("收到新訂單・桌號 " + newOrders[0].table);
         openNewOrderDialog(newOrders[0]);
@@ -403,8 +415,9 @@ async function syncOrders(notify = false) {
   const newOrders = latestOrders.filter((order) => !knownOrderIds.has(order.id));
   state.orders = latestOrders;
   knownOrderIds = new Set(latestOrders.map((order) => order.id));
+  const lastOrderChanged = refreshLastOrderFromList(latestOrders);
   if (state.view === "owner" && newOrders.length) state.managerPage = "orders";
-  if (state.view === "owner") render();
+  if (state.view === "owner" || lastOrderChanged) render();
   if (notify && state.view === "owner" && newOrders.length) {
     showToast("收到新訂單・桌號 " + newOrders[0].table);
     openNewOrderDialog(newOrders[0]);
@@ -511,6 +524,7 @@ window.addEventListener("storage", (event) => {
 window.setInterval(() => {
   void syncMenuFromCloud();
   if (state.view === "owner") void syncOrders(true);
+  else if (state.lastOrder) void syncOrders(false);
 }, 3000);
 
 function getPeriodStats(period = state.statsPeriod) {
