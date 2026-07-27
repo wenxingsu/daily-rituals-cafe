@@ -293,7 +293,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .recent-order__items { display: grid; gap: 7px; color: var(--brown-dark); font-size: 11px; }
 .recent-order__items div { display: flex; justify-content: space-between; gap: 12px; }
 .recent-order__items strong { font: 500 10px "DM Mono", monospace; white-space: nowrap; }
-.recent-order__hint { margin: 12px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
 .mobile-cart-trigger { display: none; }
 
 @media (max-width: 760px) {
