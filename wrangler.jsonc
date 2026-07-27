@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "daily-rituals-cafe-sync",
+  "main": "./worker-api.ts",
+  "compatibility_date": "2026-07-27",
+  "assets": {
+    "directory": "./site",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daily-rituals-cafe-db",
+      "database_id": "78a42503-a014-4b6b-87de-9dc9b2466b81"
+    }
+  ]
+}

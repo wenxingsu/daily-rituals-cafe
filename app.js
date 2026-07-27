@@ -2,6 +2,7 @@ const MENU_STORAGE_KEY = "daily-rituals-menu-v1";
 const CART_STORAGE_KEY = "daily-rituals-order-v1";
 const TABLE_STORAGE_KEY = "daily-rituals-table-v1";
 const ORDERS_STORAGE_KEY = "daily-rituals-orders-v1";
+const API_BASE = "/api";
 
 const seedMenu = [
   { id: "espresso-tonic", category: "咖啡", name: "柑橘氣泡美式", nameEn: "Citrus Espresso Tonic", description: "雙份濃縮遇上葡萄柚氣泡，清爽又有層次。", price: 150, tag: "本月特調", image: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=900&q=85", soldOut: false },
@@ -55,7 +56,44 @@ function loadCart() {
 
 function loadTable() { return sessionStorage.getItem(TABLE_STORAGE_KEY) || ""; }
 function loadOrders() { return parseStorage(ORDERS_STORAGE_KEY, []); }
-function saveMenu() { localStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(state.menu)); }
+let cloudSyncAvailable = true;
+
+async function cloudRequest(path, options = {}) {
+  if (!cloudSyncAvailable) throw new Error("Cloud API unavailable");
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+  });
+  if (!response.ok) {
+    if (response.status === 404) cloudSyncAvailable = false;
+    throw new Error(`Cloud API ${response.status}`);
+  }
+  return response.json();
+}
+
+async function putMenuToCloud(items = state.menu) {
+  return cloudRequest("/menu", { method: "PUT", body: JSON.stringify({ items }) });
+}
+
+async function putOrdersToCloud(orders = state.orders) {
+  return cloudRequest("/orders", { method: "PUT", body: JSON.stringify({ orders }) });
+}
+
+async function createOrderOnCloud(order) {
+  return cloudRequest("/orders", { method: "POST", body: JSON.stringify({ order }) });
+}
+
+async function updateOrderOnCloud(order) {
+  return cloudRequest(`/orders/${encodeURIComponent(order.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: order.status, completedAt: order.completedAt || null }),
+  });
+}
+
+function saveMenu() {
+  localStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(state.menu));
+  void putMenuToCloud().catch(() => {});
+}
 function saveCart() { sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.cart)); }
 function saveTable() { sessionStorage.setItem(TABLE_STORAGE_KEY, state.table); }
 function saveOrders() { localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(state.orders)); }
@@ -279,7 +317,30 @@ function openNewOrderDialog(order) {
   openDialog(newOrderDialog);
 }
 
-function syncOrders(notify = false) {
+async function syncOrders(notify = false) {
+  if (cloudSyncAvailable) {
+    try {
+      const result = await cloudRequest("/orders");
+      const cloudOrders = Array.isArray(result.orders) ? result.orders : [];
+      const localOrders = loadOrders();
+      const latestOrders = cloudOrders.length || !localOrders.length ? cloudOrders : localOrders;
+      if (!cloudOrders.length && localOrders.length) await putOrdersToCloud(localOrders);
+      const newOrders = latestOrders.filter((order) => !knownOrderIds.has(order.id));
+      state.orders = latestOrders;
+      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(state.orders));
+      knownOrderIds = new Set(latestOrders.map((order) => order.id));
+      if (state.view === "owner" && newOrders.length) state.managerPage = "orders";
+      if (state.view === "owner") render();
+      if (notify && state.view === "owner" && newOrders.length) {
+        showToast("收到新訂單・桌號 " + newOrders[0].table);
+        openNewOrderDialog(newOrders[0]);
+      }
+      return;
+    } catch {
+      // Keep the local fallback below when the API is unavailable.
+    }
+  }
+
   const latestOrders = loadOrders();
   const newOrders = latestOrders.filter((order) => !knownOrderIds.has(order.id));
   state.orders = latestOrders;
@@ -292,18 +353,40 @@ function syncOrders(notify = false) {
   }
 }
 
+async function syncMenuFromCloud() {
+  if (!cloudSyncAvailable) return;
+  try {
+    const result = await cloudRequest("/menu");
+    if (Array.isArray(result.items) && result.items.length) {
+      state.menu = result.items.map((item) => ({ ...item, soldOut: Boolean(item.soldOut) }));
+      localStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(state.menu));
+      render();
+    } else if (state.menu.length) {
+      await putMenuToCloud(state.menu);
+    }
+  } catch {
+    // The local menu remains usable while the API is unavailable.
+  }
+}
+
+async function hydrateCloudState() {
+  await syncMenuFromCloud();
+  await syncOrders(false);
+}
+
 function completeOrder(orderId) {
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order || !isPendingOrder(order)) return;
   order.status = "已結案";
   order.completedAt = new Date().toISOString();
   saveOrders();
+  void updateOrderOnCloud(order).catch(() => {});
   knownOrderIds.add(order.id);
   render();
   showToast("訂單 " + order.id + " 已完成出餐結案");
 }
 
-function submitOrderFromPayment(event) {
+async function submitOrderFromPayment(event) {
   const button = event.target instanceof Element ? event.target.closest("button") : null;
   if (!button || button.dataset.submitPayment === undefined) return;
   event.preventDefault();
@@ -320,13 +403,20 @@ function submitOrderFromPayment(event) {
   state.orders = [order, ...state.orders];
   knownOrderIds.add(order.id);
   saveOrders();
+  let cloudSaved = false;
+  try {
+    await createOrderOnCloud(order);
+    cloudSaved = true;
+  } catch {
+    // Keep the order locally so it is not lost if the API is temporarily unavailable.
+  }
   state.cart = {};
   state.table = "";
   saveCart();
   sessionStorage.removeItem(TABLE_STORAGE_KEY);
   closeDialog(checkoutDialog);
   render();
-  showToast("訂單已送出，店家將開始準備");
+  showToast(cloudSaved ? "訂單已送出，店家將開始準備" : "訂單已暫存，網路恢復後再同步");
 }
 
 document.addEventListener("click", (event) => {
@@ -354,7 +444,8 @@ window.addEventListener("storage", (event) => {
 });
 
 window.setInterval(() => {
-  if (state.view === "owner") syncOrders(true);
+  void syncMenuFromCloud();
+  if (state.view === "owner") void syncOrders(true);
 }, 3000);
 
 function getPeriodStats(period = state.statsPeriod) {
@@ -456,3 +547,5 @@ document.addEventListener("click", (event) => {
     exportStats();
   }
 });
+
+void hydrateCloudState();
